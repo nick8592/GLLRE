@@ -1,6 +1,7 @@
 import os
 import math
 import numpy as np
+from tqdm.auto import tqdm
 from PIL import Image
 
 
@@ -43,8 +44,8 @@ def calc_LRE(image, width, height, region_size):
                 modified_array[y, x] = int(normalized_value)
 
     # Save the modified pixel values as a grayscale image
-    modified_image = Image.fromarray(modified_array, mode='L')
-    modified_image.save('modified_image.png')
+    modified_image = Image.fromarray(modified_array, mode="L")
+    modified_image.save("modified_image.png")
 
     return modified_array
 
@@ -90,3 +91,69 @@ for i in range(height * width):
 pij = nij / (height * width)
 print(pij.shape)
 
+
+# Initialize variables to store the optimal values
+min_relative_entropy = float('inf')
+optimal_s = None
+optimal_t = None
+
+# Define the range of possible values for s and t
+s_range = range(0, 255)
+t_range = range(0, 255)
+
+# Iterate over each combination of s and t
+for s in tqdm(s_range):
+    for t in t_range:
+        # Define the range of rows and columns
+        row_start, row_end = 0, s
+        col_start, col_end = 0, t
+
+        # Sum the values within the specified range for object and background
+        prob_object = np.sum(pij[row_start:row_end, col_start:col_end])
+        prob_background = np.sum(pij[row_end:, col_start:col_end])
+
+        total_object_i = 0
+        total_object_j = 0
+
+        for i in range(s):
+            for j in range(t):
+                total_object_i += i * pij[i][j]
+                total_object_j += j * pij[i][j]
+        mean_object_i = total_object_i / prob_object
+        mean_object_j = total_object_j / prob_object
+
+        total_background_i = 0
+        total_background_j = 0
+
+        for i in range(s, 255):
+            for j in range(t):
+                total_background_i += i * pij[i][j]
+                total_background_j += j * pij[i][j]
+        mean_background_i = total_background_i / prob_background
+        mean_background_j = total_background_j / prob_background
+
+        entropy_object = 0
+        entropy_background = 0
+
+        for i in range(s):
+            for j in range(t):
+                entropy_object += (i * pij[i][j] * math.log(1 / mean_object_i)) + (
+                    j * pij[i][j] * math.log(1 / mean_object_j)
+                )
+        for i in range(s, 255):
+            for j in range(t):
+                entropy_background += (i * pij[i][j] * math.log(1 / mean_background_i)) + (
+                    j * pij[i][j] * math.log(1 / mean_background_j)
+                )
+
+        relative_entropy = entropy_object + entropy_background
+
+        # Check if the relative entropy is lower than the current minimum
+        if relative_entropy < min_relative_entropy:
+            min_relative_entropy = relative_entropy
+            optimal_s = s
+            optimal_t = t
+
+print("Optimal s:", optimal_s)
+print("Optimal t:", optimal_t)
+print("Minimum relative entropy:", min_relative_entropy)
